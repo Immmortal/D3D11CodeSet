@@ -1,6 +1,6 @@
-//***************************************************************************************
+//
 // d3dApp.cpp by Frank Luna (C) 2011 All Rights Reserved.
-//***************************************************************************************
+//
 
 #include "d3dApp.h"
 #include <WindowsX.h>
@@ -188,14 +188,22 @@ void D3DApp::OnResize()
 
 	// Set the viewport transform.
 
-	mScreenViewport.TopLeftX = 0;
-	mScreenViewport.TopLeftY = 0;
-	mScreenViewport.Width    = static_cast<float>(mClientWidth);
-	mScreenViewport.Height   = static_cast<float>(mClientHeight);
-	mScreenViewport.MinDepth = 0.0f;
-	mScreenViewport.MaxDepth = 1.0f;
+	//mScreenViewport.TopLeftX = 0;
+	//mScreenViewport.TopLeftY = 0;
+	//mScreenViewport.Width    = static_cast<float>(mClientWidth);
+	//mScreenViewport.Height   = static_cast<float>(mClientHeight);
+	//mScreenViewport.MinDepth = 0.0f;
+	//mScreenViewport.MaxDepth = 1.0f;
+	//md3dImmediateContext->RSSetViewports(1, &mScreenViewport);
 
-	md3dImmediateContext->RSSetViewports(1, &mScreenViewport);
+	D3D11_VIEWPORT vp;
+	vp.TopLeftX = 100.0f;
+	vp.TopLeftY = 100.0f;
+	vp.Width = 500.0f;
+	vp.Height = 400.0f;
+	vp.MinDepth = 0.0f;
+	vp.MaxDepth = 1.0f;
+	md3dImmediateContext->RSSetViewports(1, &vp);
 }
  
 LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -453,8 +461,14 @@ bool D3DApp::InitDirect3D()
 	IDXGIFactory* dxgiFactory = 0;
 	HR(dxgiAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&dxgiFactory));
 
+	GetAdaptersInfo(dxgiFactory);
+
+
 	HR(dxgiFactory->CreateSwapChain(md3dDevice, &sd, &mSwapChain));
-	
+
+	//#Exercise 4.7.1 disabling the ALT-ENTER functionality to switch between full screen and windowed mode
+	HR(dxgiFactory->MakeWindowAssociation(mhMainWnd, DXGI_MWA_NO_WINDOW_CHANGES));
+
 	ReleaseCOM(dxgiDevice);
 	ReleaseCOM(dxgiAdapter);
 	ReleaseCOM(dxgiFactory);
@@ -466,6 +480,107 @@ bool D3DApp::InitDirect3D()
 	OnResize();
 
 	return true;
+}
+
+void D3DApp::GetAdaptersInfo(IDXGIFactory* dxgiFactory)
+{
+	//#Exercise 4.7.2 Use the IDXGIFactory::EnumAdapters method to determine how many adapters are on your system.
+	//[龙书D3D11章节习题答案(第四章) - llguanli - 博客园](https://www.cnblogs.com/llguanli/p/8572886.html)
+	//列出全部找到的显卡设备的信息
+	UINT i = 0;
+	IDXGIAdapter* pAdapter;
+	DXGI_ADAPTER_DESC desc;
+	ZeroMemory(&desc, sizeof(desc));
+	WCHAR adapterInfo[512];
+
+	// MS Basic Render Driver？
+	std::vector<IDXGIAdapter*> vAdapters;
+	while (dxgiFactory->EnumAdapters(i, &pAdapter) != DXGI_ERROR_NOT_FOUND)
+	{
+		vAdapters.push_back(pAdapter);
+		pAdapter->GetDesc(&desc);
+		/*
+		typedef struct DXGI_ADAPTER_DESC {
+			WCHAR  Description[128];
+			UINT   VendorId;
+			UINT   DeviceId;
+			UINT   SubSysId;
+			UINT   Revision;
+			SIZE_T DedicatedVideoMemory;
+			SIZE_T DedicatedSystemMemory;
+			SIZE_T SharedSystemMemory;
+			LUID   AdapterLuid;
+		} DXGI_ADAPTER_DESC;
+		*/
+		swprintf_s(adapterInfo, L"-------- Adapter#%d --------\nDescription:%s\nVendorId:%u\nDeviceId:%u\nSubSysId:%u\nDedicatedVideoMemory:%uB\nDedicatedSystemMemory:%uB\nSharedSystemMemory:%uB\nLUID:%u%u\nOutputs:\n",
+			i, desc.Description, desc.VendorId, desc.DeviceId, desc.SubSysId, desc.DedicatedVideoMemory, desc.DedicatedSystemMemory, desc.SharedSystemMemory, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
+		OutputDebugString(adapterInfo);
+
+		//#Exercise 4.7.3 Use the IDXGIAdapter::CheckInterfaceSupport method to see if the adapters on your system support Direct3D 11.
+		/*
+		https://docs.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiadapter-checkinterfacesupport
+		看下面Remarks Note的意思是DX11以后别用CheckInterfaceSupport这个API了，想知道支持什么就去尝试创建一下.
+		*/
+		//pAdapter->CheckInterfaceSupport;
+
+		//#Exercise 4.7.4 use the IDXGIAdapter::EnumOutputs method to enumerate the outputs for a particular adapter.
+		//Use this method to determine the number of outputs for the default adapter.
+		UINT j = 0;
+		IDXGIOutput * pOutput;
+		std::vector<IDXGIOutput*> vOutputs;
+		DXGI_OUTPUT_DESC desc2;
+		WCHAR outputInfo[512];
+		while (pAdapter->EnumOutputs(j, &pOutput) != DXGI_ERROR_NOT_FOUND)
+		{
+			vOutputs.push_back(pOutput);
+			pOutput->GetDesc(&desc2);
+			/*
+			typedef struct DXGI_OUTPUT_DESC {
+			  WCHAR              DeviceName[32];
+			  RECT               DesktopCoordinates;
+			  BOOL               AttachedToDesktop;
+			  DXGI_MODE_ROTATION Rotation;
+			  HMONITOR           Monitor;
+			} DXGI_OUTPUT_DESC;
+			*/
+			swprintf_s(outputInfo, L"\t-------- Output#%d-%d --------\n\tDeviceName:%s\n\tDesktopCoordinates:[%ld,%ld,%ld,%ld]\n\tAttachedToDesktop:%d\n\tRotation:%u\n",
+				i, j, desc2.DeviceName, desc2.DesktopCoordinates.left, desc2.DesktopCoordinates.right, desc2.DesktopCoordinates.top, desc2.DesktopCoordinates.bottom, desc2.AttachedToDesktop, desc2.Rotation);
+			//desc2.Monitor: Monitor Handle
+			OutputDebugString(outputInfo);
+
+			//#Exercise 4.7.5 Each output has a list of supported display modes (DXGI_MODE_DESC) for a given pixel format. using the IDXGIOutput::GetDisplayModeList method.
+
+
+			UINT numOutputs = 0;
+			pOutput->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_ENUM_MODES_INTERLACED, &numOutputs, 0);
+			DXGI_MODE_DESC* pDescs = new DXGI_MODE_DESC[numOutputs];
+			pOutput->GetDisplayModeList(DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_ENUM_MODES_INTERLACED, &numOutputs, pDescs);
+
+			swprintf_s(outputInfo, L"\tModes Supported:%d\n",
+				numOutputs);
+			OutputDebugString(outputInfo);
+
+			for (auto k = 0; k < numOutputs; k++)
+			{
+				/*
+				typedef struct DXGI_MODE_DESC {
+				  UINT                     Width;
+				  UINT                     Height;
+				  DXGI_RATIONAL            RefreshRate;
+				  DXGI_FORMAT              Format;
+				  DXGI_MODE_SCANLINE_ORDER ScanlineOrdering;
+				  DXGI_MODE_SCALING        Scaling;
+				} DXGI_MODE_DESC;
+				*/
+				auto pDesc = pDescs[k];
+				swprintf_s(outputInfo, L"\t\tMode#%u/%u: W,H:[%u,%u]\tFormat: %u\tRefreshRate: %.0f Hz\n",
+					k, numOutputs, pDesc.Width, pDesc.Height, pDesc.Format, float(pDesc.RefreshRate.Numerator)/float(pDesc.RefreshRate.Denominator));
+				OutputDebugStringW(outputInfo);
+			}
+			++j;
+		}
+		++i;
+	}
 }
 
 void D3DApp::CalculateFrameStats()

@@ -49,6 +49,8 @@ protected:
 	bool InitMainWindow();
 	bool InitDirect3D();
 
+	void GetAdaptersInfo(IDXGIFactory* dxgiFactory);
+
 	void CalculateFrameStats();
 
 protected:
